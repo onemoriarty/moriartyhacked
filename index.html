@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hacked by Moriarty</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background-color: #000;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            color: #fff;
+            overflow: hidden;
+        }
+        .hacked {
+            color: #00ff00;
+            font-size: 48px;
+            font-weight: bold;
+            text-align: center;
+            text-shadow: 0 0 15px #00ff00;
+            margin-bottom: 20px;
+            animation: glitch 1s infinite;
+            display: none;
+        }
+        .site-hacked {
+            color: #ffffff;
+            font-size: 24px;
+            text-align: center;
+            text-shadow: 0 0 10px #ffffff;
+            margin-bottom: 30px;
+            display: none;
+        }
+        .video-container {
+            width: 80%;
+            max-width: 600px;
+            box-shadow: 0 0 30px #00ff00;
+            border-radius: 10px;
+            overflow: hidden;
+            display: none;
+        }
+        #terminal {
+            width: 100%;
+            height: 100vh;
+            background-color: #000;
+            color: #00ff00;
+            padding: 20px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            overflow: auto;
+        }
+        @keyframes glitch {
+            0% { transform: translate(0) }
+            20% { transform: translate(-5px, 5px) }
+            40% { transform: translate(-5px, -5px) }
+            60% { transform: translate(5px, 5px) }
+            80% { transform: translate(5px, -5px) }
+            100% { transform: translate(0) }
+        }
+    </style>
+</head>
+<body>
+    <div id="terminal"></div>
+    
+    <div class="hacked">Hacked by Moriarty</div>
+    <div class="site-hacked">Bu site Moriarty tarafından hacklenmiştir!</div>
+    
+    <div class="video-container">
+        <iframe 
+            width="100%" 
+            height="350" 
+            src="https://www.youtube.com/embed/b5SejYpST5Q?si=SmK9bN-EzCm3l8eJ&controls=0&autoplay=1&mute=0&loop=1&playlist=b5SejYpST5Q" 
+            title="YouTube video player" 
+            frameborder="0" 
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+            referrerpolicy="strict-origin-when-cross-origin" 
+            allowfullscreen>
+        </iframe>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            document.addEventListener('click', () => {
+                window.location.href = "https://moriarty.vercel.app/";
+            });
+
+            const terminal = document.getElementById('terminal');
+            
+            const messages = [
+                "moriarty@kali:~$ selamlar beyler ben bu siteye > \n",
+                "moriarty@kali:~$ ya canım sıkıldığı için girmişimdir\n",
+                "clear\n",
+                "moriarty@kali:~$ yada sitedeki açığınızı bildirmek içindir\n",
+                "clear\n",
+                "moriarty@kali:~$ haydi selametle beyler\n",
+                "exit\n"
+            ];
+
+            let index = 0;
+            function typeMessage() {
+                if (index < messages.length) {
+                    if (messages[index] === "clear\n") {
+                        terminal.textContent = "";
+                    } else {
+                        terminal.textContent += messages[index];
+                    }
+                    index++;
+                    setTimeout(typeMessage, 1500);
+                } else {
+                    setTimeout(() => {
+                        terminal.style.display = 'none';
+                        document.querySelector('.hacked').style.display = 'block';
+                        document.querySelector('.site-hacked').style.display = 'block';
+                        document.querySelector('.video-container').style.display = 'block';
+                    }, 1000);
+                }
+            }
+
+            typeMessage();
+        });
+    </script>
+</body>
+</html>
