@@ -67,6 +67,7 @@
             text-align: center;
             text-shadow: 0 0 10px #9b00ff, 0 0 20px #9b00ff; /* Parlak mor gölge */
             animation: glow 1.5s infinite alternate;
+            cursor: pointer; /* Tıklanabilir cursor */
         }
         @keyframes glitch {
             0% { transform: translate(0) }
@@ -101,7 +102,9 @@
         </iframe>
     </div>
 
-    <div id="footer">WarNight Team by hacked</div>
+    <div id="footer" onclick="window.location.href='https://discord.gg/QRppCpjvZc'">
+        WarNight Team by hacked
+    </div>
 
     <script>
         document.addEventListener("DOMContentLoaded", () => {
@@ -112,12 +115,12 @@
             const terminal = document.getElementById('terminal');
             
             const messages = [
-                "moriarty@kali:~$ selamlar beyler ben bu siteye > \n",
-                "moriarty@kali:~$ ya canım sıkıldığı için girmişimdir\n",
+                "root@moriarty:~$ selamlar kankalar > \n",
+                "root@moriarty:~$ ben bu siteye ya canım sıkıldığı için girmişimdir\n",
                 "clear\n",
-                "moriarty@kali:~$ yada sitedeki açığınızı bildirmek içindir\n",
+                "root@moriarty:~$ yada sitedeki açığınızı bildirmek içindir\n",
                 "clear\n",
-                "moriarty@kali:~$ haydi selametle beyler\n",
+                "root@moriarty:~$ haydi selametle kankalar\n",
                 "exit\n"
             ];
 
