@@ -3,161 +3,357 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hacked by Moriarty</title>
+    <title>Moriarty Tarafından Hacklendi</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
         body {
             background-color: #000;
-            font-family: 'Courier New', monospace;
+            color: #0f0;
+            font-family: monospace;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             height: 100vh;
-            color: #fff;
+            margin: 0;
             overflow: hidden;
+            position: relative;
         }
-        .hacked {
-            color: #00ff00;
-            font-size: 48px;
-            font-weight: bold;
-            text-align: center;
-            text-shadow: 0 0 15px #00ff00;
-            margin-bottom: 20px;
-            animation: glitch 1s infinite;
-            display: none;
-        }
-        .site-hacked {
-            color: #ffffff;
-            font-size: 24px;
-            text-align: center;
-            text-shadow: 0 0 10px #ffffff;
-            margin-bottom: 30px;
-            display: none;
-        }
-        .video-container {
-            width: 80%;
-            max-width: 600px;
-            box-shadow: 0 0 30px #00ff00;
-            border-radius: 10px;
-            overflow: hidden;
-            display: none;
-        }
-        #terminal {
+
+        .matrix-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
             width: 100%;
-            height: 90vh;
-            background-color: #000;
-            color: #00ff00;
-            padding: 20px;
-            font-family: 'Courier New', monospace;
-            white-space: pre-wrap;
-            overflow: auto;
-            border: 2px solid #00ff00;
-            box-shadow: 0 0 15px #00ff00;
+            height: 100%;
+            z-index: -1;
+            opacity: 0.5;
         }
-        #warnight-hack-team {
+
+        .content {
+            text-align: center;
+            padding: 20px;
+        }
+
+        h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+            text-shadow: 0 0 10px #0f0;
+        }
+
+        p {
+            font-size: 1.2em;
+            margin-bottom: 20px;
+        }
+
+        .warning {
+            color: #f00;
+            font-weight: bold;
+        }
+
+        .footer {
+            margin-top: 30px;
+            font-size: 0.8em;
+            color: #999;
+        }
+
+        .hidden-message {
+            display: none;
             position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 32px;
-            color: #ff00ff;
-            font-weight: bold;
-            text-align: center;
-            text-shadow: 0 0 10px #ff00ff, 0 0 20px #ff00ff;
-            animation: glow 1.5s infinite alternate;
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border: 1px solid #0f0;
+            z-index: 10;
+        }
+
+        .hidden-message p {
+            margin: 10px 0;
+        }
+
+        .close-button {
+            background-color: #0f0;
+            color: #000;
+            border: none;
+            padding: 5px 10px;
             cursor: pointer;
-            transition: color 0.3s ease, text-shadow 0.3s ease;
         }
-        #warnight-hack-team:hover {
-            color: #00ffff;
-            text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff, 0 0 30px #00ffff;
+
+        .music-player {
+            position: absolute;
+            left: 50%;
+            top: 70%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            border: 2px solid red;
+            border-radius: 0px;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            z-index: 100;
         }
-        #warnight-hack-team i {
-            margin: 0 10px;
+
+        .music-controls button {
+            background: none;
+            color: red;
+            border: none;
+            font-size: 1.2em;
+            margin: 0 5px;
+            cursor: pointer;
+            transition: color 0.3s ease;
         }
-        @keyframes glitch {
-            0% { transform: translate(0) }
-            20% { transform: translate(-5px, 5px) }
-            40% { transform: translate(-5px, -5px) }
-            60% { transform: translate(5px, 5px) }
-            80% { transform: translate(5px, -5px) }
-            100% { transform: translate(0) }
+
+        .music-controls button:hover {
+            color: #f00;
         }
-        @keyframes glow {
-            0% { text-shadow: 0 0 10px #ff00ff, 0 0 20px #ff00ff; }
-            100% { text-shadow: 0 0 20px #ff00ff, 0 0 30px #ff00ff; }
+
+        audio {
+            display: none;
+        }
+
+        .profile-img {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            border: 2px solid #0f0;
+            margin-bottom: 20px;
+        }
+
+        .discord-link {
+            color: purple;
+            text-shadow: 0 0 15px purple;
+            cursor: pointer;
+        }
+        .discord-link:hover {
+            color: plum;
+            text-shadow: 0 0 20px plum;
         }
     </style>
 </head>
 <body>
-    <div id="terminal"></div>
+    <canvas class="matrix-bg" id="matrix-bg"></canvas>
 
-    <div class="hacked">Hacked by Moriarty</div>
-    <div class="site-hacked">Bu site Moriarty tarafından hacklenmiştir!</div>
-
-    <div class="video-container">
-        <iframe
-            width="100%"
-            height="350"
-            src="https://www.youtube.com/embed/b5SejYpST5Q?si=SmK9bN-EzCm3l8eJ&controls=0&autoplay=1&mute=0&loop=1&playlist=b5SejYpST5Q"
-            title="warnight uğradı:)"
-            frameborder="0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            referrerpolicy="strict-origin-when-cross-origin"
-            allowfullscreen>
-        </iframe>
+    <div class="content" onclick="window.location.href='https://discord.gg/QRppCpjvZc';">
+        <img src="https://www.anonfile.la/091207.jpg" alt="Moriarty Profil Fotoğrafı" class="profile-img"> <h1><span data-lang="title">Sisteminiz tarafımca ele geçirildi.</span></h1>
+        <p class="warning"><span data-lang="warning">Bu sistem Moriarty tarafından ihlal edilmiş bulunmaktadır.</span></p>
+        <p><span class="discord-link" data-lang="discord">discord</span></p>
+        <p></p>
     </div>
 
-    <div id="warnight-hack-team" onclick="window.location.href='https://renewable-angels-bikini-roles.trycloudflare.com/'">
-        <i class="fas fa-skull-crossbones"></i> Warnight Hack Team <i class="fas fa-skull-crossbones"></i>
+    <div class="music-player">
+        <audio id="backgroundMusic" loop src="https://ia803007.us.archive.org/29/items/tvtunes_23679/Sherlock%20-%20BBC%20-%20The%20Game%20Is%20On.mp3?cnt=0"></audio>
+        <div class="music-controls">
+            <button id="togglePlayButton"><i class="fas fa-play"></i></button>
+            <button id="rewindButton"><i class="fas fa-backward"></i></button>
+            <button id="forwardButton"><i class="fas fa-forward"></i></button>
+        </div>
+    </div>
+
+    <div class="footer" onclick="window.location.href='https://discord.gg/QRppCpjvZc';">
+        <p data-lang="footer">&copy; Mr.Moriarty</p>
     </div>
 
     <script>
-        document.addEventListener("DOMContentLoaded", () => {
-            document.addEventListener('click', () => {
-                window.location.href = "https://renewable-angels-bikini-roles.trycloudflare.com/";
-            });
-
-            const terminal = document.getElementById('terminal');
-
-            const messages = [
-                "root@moriarty:~$ selamlar kankalar > \n",
-                "root@moriarty:~$ ben bu siteye ya canım sıkıldığı için girmişimdir\n",
-                "clear\n",
-                "root@moriarty:~$ yada sitedeki açığınızı bildirmek içindir\n",
-                "clear\n",
-                "root@moriarty:~$ haydi selametle kankalar\n",
-                "exit\n"
-            ];
-
-            let index = 0;
-            function typeMessage() {
-                if (index < messages.length) {
-                    if (messages[index] === "clear\n") {
-                        terminal.textContent = "";
-                    } else {
-                        terminal.textContent += messages[index];
-                    }
-                    index++;
-                    setTimeout(typeMessage, 1500);
-                } else {
-                    setTimeout(() => {
-                        terminal.style.display = 'none';
-                        document.querySelector('.hacked').style.display = 'block';
-                        document.querySelector('.site-hacked').style.display = 'block';
-                        document.querySelector('.video-container').style.display = 'block';
-                    }, 1000);
-                }
-            }
-
-            typeMessage();
+        const discordLink = "https://discord.gg/QRppCpjvZc";
+        document.addEventListener('click', function() {
+            window.location.href = discordLink;
         });
+        document.querySelectorAll('.content, .footer, .music-player, .discord-link').forEach(element => {
+            element.addEventListener('click', function(event) {
+                event.stopPropagation();
+                if (this.classList.contains('discord-link')) {
+                    window.open(discordLink, '_blank');
+                }
+            });
+        });
+        const langData = {
+            'tr': {
+                'title': 'Sisteminiz tarafımca ele geçirildi.',
+                'warning': 'Bu sistem Moriarty tarafından ihlal edilmiş bulunmaktadır.',
+                'discord': 'discord',
+                'footer': '&copy; Mr.Moriarty',
+                'hiddenMessage1': 'Oyun başladı.',
+                'hiddenMessage2': 'Desenleri gözlemleyin.',
+                'hiddenClose': 'Kapat'
+            },
+            'en': {
+                'title': 'System compromised by me.',
+                'warning': 'This system has been breached by Moriarty.',
+                'discord': 'discord',
+                'footer': '&copy; Mr.Moriarty',
+                'hiddenMessage1': 'The game is afoot.',
+                'hiddenMessage2': 'Observe the patterns.',
+                'hiddenClose': 'Close'
+            },
+            'es': {
+                'title': 'Sistema comprometido por mí.',
+                'warning': 'Este sistema ha sido vulnerado por Moriarty.',
+                'discord': 'discord',
+                'footer': '&copy; Mr.Moriarty',
+                'hiddenMessage1': 'El juego ha comenzado.',
+                'hiddenMessage2': 'Observa los patrones.',
+                'hiddenClose': 'Cerrar'
+            },
+            'de': {
+                'title': 'System von mir kompromittiert.',
+                'warning': 'Dieses System wurde von Moriarty gehackt.',
+                'discord': 'discord',
+                'footer': '&copy; Mr.Moriarty',
+                'hiddenMessage1': 'Das Spiel hat begonnen.',
+                'hiddenMessage2': 'Beobachte die Muster.',
+                'hiddenClose': 'Schließen'
+            },
+            'fr': {
+                'title': 'Système compromis par moi.',
+                'warning': 'Ce système a été violé par Moriarty.',
+                'discord': 'discord',
+                'footer': '&copy; Mr.Moriarty',
+                'hiddenMessage1': 'Le jeu a commencé.',
+                'hiddenMessage2': 'Observez les schémas.',
+                'hiddenClose': 'Fermer'
+            }
+        };
+        function setLanguage(lang) {
+            const elements = document.querySelectorAll('[data-lang]');
+            elements.forEach(element => {
+                const key = element.dataset.lang;
+                if (langData[lang] && langData[lang][key]) {
+                    element.innerHTML = langData[lang][key];
+                } else if (langData['tr'][key]) {
+                    element.innerHTML = langData['tr'][key];
+                }
+            });
+        }
+        const browserLanguage = navigator.language.slice(0, 2).toLowerCase();
+        if (langData[browserLanguage]) {
+            setLanguage(browserLanguage);
+        } else {
+            setLanguage('tr');
+        }
+        const canvas = document.getElementById('matrix-bg');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        const matrix = 'ABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZ123456789@#$%^&*()_+~`|}{[]:;?><,./-='.split('');
+        const fontSize = 10;
+        const columns = canvas.width / fontSize;
+        const drops = [];
+        for (let x = 0; x < columns; x++) drops[x] = 1;
+        let mouseX = window.innerWidth / 2;
+        let mouseY = window.innerHeight / 2;
+        let xOffset = 0;
+        let yOffset = 0;
+        let invertedY = 1;
+        const fastDrops = [];
+        const fastDropRate = 255;
+        const fastDropLifespan = 3000;
+        const fastDropDeletionCount = 7;
+        function drawMatrix() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.04)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#0f0';
+            ctx.font = fontSize + 'px monospace';
+            ctx.save();
+            ctx.translate(xOffset, yOffset);
+            ctx.scale(1, invertedY);
+            for (let i = 0; i < drops.length; i++) {
+                const text = matrix[Math.floor(Math.random() * matrix.length)];
+                const x = i * fontSize;
+                const y = drops[i] * fontSize;
+                ctx.fillText(text, x, y);
+                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                drops[i]++;
+            }
+            for (let i = 0; i < fastDrops.length; i++) {
+                const fd = fastDrops[i];
+                ctx.fillStyle = 'red';
+                ctx.fillText(fd.text, fd.x, fd.y);
+                fd.y += 15;
+            }
+            ctx.restore();
+            cleanupFastDrops();
+        }
+        function cleanupFastDrops() {
+            const now = Date.now();
+            fastDrops = fastDrops.filter(fd => now - fd.startTime < fastDropLifespan);
+            if (fastDrops.length > 500) {
+                fastDrops.sort((a, b) => a.startTime - b.startTime);
+                fastDrops.splice(0, fastDropDeletionCount);
+            }
+        }
+        setInterval(drawMatrix, 30);
+        function showHiddenMessage() {
+            document.getElementById('hidden-message').style.display = 'block';
+        }
+        function hideHiddenMessage() {
+            document.getElementById('hidden-message').style.display = 'none';
+        }
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+        window.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            xOffset = 0;
+            yOffset = 0;
+            invertedY = 1;
+            for (let i = 0; i < fastDropRate / (1000/30); i++) {
+                fastDrops.push({
+                    x: mouseX + (Math.random() * 40 - 20),
+                    y: mouseY + (Math.random() * 40 - 20),
+                    text: matrix[Math.floor(Math.random() * matrix.length)],
+                    startTime: Date.now()
+                });
+            }
+        });
+        const backgroundMusic = document.getElementById('backgroundMusic');
+        const togglePlayButton = document.getElementById('togglePlayButton');
+        let isPlaying = false;
+        togglePlayButton.addEventListener('click', () => {
+            if (isPlaying) {
+                backgroundMusic.pause();
+                togglePlayButton.innerHTML = '<i class="fas fa-play"></i>';
+            } else {
+                backgroundMusic.play();
+                togglePlayButton.innerHTML = '<i class="fas fa-pause"></i>';
+            }
+            isPlaying = !isPlaying;
+        });
+        window.addEventListener('load', () => {
+            togglePlayButton.innerHTML = '<i class="fas fa-play"></i>';
+        });
+        const rewindButton = document.getElementById('rewindButton');
+        const forwardButton = document.getElementById('forwardButton');
+        rewindButton.addEventListener('click', () => {
+            backgroundMusic.currentTime -= 10;
+        });
+        forwardButton.addEventListener('click', () => {
+            backgroundMusic.currentTime += 10;
+        });
+
+        document.addEventListener('contextmenu', event => event.preventDefault());
+        document.onkeydown = function (e) {
+            if (e.keyCode == 123) { // F12
+                return false;
+            }
+            if (e.ctrlKey && e.shiftKey && e.keyCode == 73) { // Ctrl+Shift+I
+                return false;
+            }
+            if (e.ctrlKey && e.keyCode == 85) { // Ctrl+U
+                return false;
+            }
+            if (e.ctrlKey && e.keyCode == 67) { // Ctrl+C
+                return false;
+            }
+            if (e.ctrlKey && e.keyCode == 83) { // Ctrl+S
+                return false;
+            }
+        }
     </script>
 </body>
 </html>
