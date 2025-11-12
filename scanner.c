@@ -22,7 +22,7 @@
 //======[ AYARLAR ]======//
 #define TELNET_PORT 23
 #define TIMEOUT_SEC 3
-#define MAX_THREADS 512 // Sisteme göre ayarlanabilir, yüksek tutmak hızı artırır
+#define MAX_THREADS 400 // Sisteme göre ayarlanabilir, yüksek tutmak hızı artırır
 #define OUTPUT_FILE "success.txt"
 //=======================//
 
