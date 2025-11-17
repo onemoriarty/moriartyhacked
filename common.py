@@ -15,7 +15,7 @@ import sys
 warnings.filterwarnings('ignore', message='Unverified HTTPS request')
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  🎯 ULTRA HIGH-PERFORMANCE JUGGERNAUT CONFIGURATION
+#  🎯 ULTRA HIGH-PERFORMANCE JUGGERNAUT CONFIGURATION (Legacy Compatible)
 # ═══════════════════════════════════════════════════════════════════════════
 
 BASE_URL = "https://commoncrawl.org/get-started"
@@ -43,15 +43,20 @@ ENDC = '\033[0m'
 thread_local = threading.local()
 
 def create_optimized_session():
-    """Her thread için özel, optimize edilmiş ve retry mekanizmalı session oluşturur."""
+    """Her thread için özel, optimize edilmiş ve Python 3.6 uyumlu retry mekanizmalı session oluşturur."""
     if not hasattr(thread_local, "session"):
         session = requests.Session()
+        
+        # --- PYTHON 3.6 UYUMLULUK DÜZELTMESİ ---
+        # `allowed_methods` yerine, eski versiyonların anladığı `method_whitelist` kullanılır.
         retry_strategy = Retry(
             total=MAX_RETRIES,
             backoff_factor=BACKOFF_FACTOR,
             status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["HEAD", "GET"]
+            method_whitelist=["HEAD", "GET"]  # 'allowed_methods' yerine bu kullanılır.
         )
+        # -----------------------------------------
+        
         adapter = HTTPAdapter(
             pool_connections=MAX_WORKERS,
             pool_maxsize=MAX_WORKERS * 2,
@@ -60,23 +65,40 @@ def create_optimized_session():
         session.mount("http://", adapter)
         session.mount("https://", adapter)
         session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
+            'User-Agent': f'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.0.0 Safari/537.36',
             'Accept-Encoding': 'gzip, deflate',
             'Connection': 'keep-alive'
         })
         thread_local.session = session
     return thread_local.session
 
-class ThreadSafeCounter:
-    def __init__(self):
+# tqdm kütüphanesi olmadan çalışan basit bir ilerleme çubuğu sınıfı
+class SimpleProgress:
+    def __init__(self, total, desc="Progress"):
+        self.total = total
+        self.current = 0
+        self.desc = desc
         self.lock = threading.Lock()
-        self.stats = {'success': 0, 'failed': 0, 'skipped': 0}
-    def increment(self, key, value=1):
+        self.start_time = time.time()
+
+    def update(self, n=1):
         with self.lock:
-            self.stats[key] += value
-    def get_stats(self):
-        with self.lock:
-            return self.stats.copy()
+            self.current += n
+            elapsed = time.time() - self.start_time
+            rate = self.current / elapsed if elapsed > 0 else 0
+            percent = (self.current / self.total) * 100 if self.total > 0 else 0
+            
+            bar_len = 30
+            filled_len = int(round(bar_len * self.current / float(self.total)))
+            
+            bar = '█' * filled_len + '-' * (bar_len - filled_len)
+            
+            # \r ile satır başına dönerek aynı satırı güncelle
+            sys.stdout.write(f'\r{self.desc}: |{bar}| {self.current}/{self.total} [{percent:.1f}%] @ {rate:.2f} items/s')
+            sys.stdout.flush()
+
+    def finish(self):
+        sys.stdout.write('\n')
 
 def find_crawl_archives(start_url):
     print(f"{CYAN}{BOLD}[*] FAZ 1: Ana arşiv listesi taranıyor...{ENDC}")
@@ -93,21 +115,19 @@ def find_crawl_archives(start_url):
         print(f"{RED}[!] FAZ 1 Hatası: {e}{ENDC}")
         return []
 
-def process_single_archive(archive_url):
+def process_single_archive(archive_url, progress):
     session = create_optimized_session()
-    archive_name = archive_url.split('/')[-2]
     try:
         response = session.get(archive_url, timeout=CONNECT_TIMEOUT)
-        response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
         link = soup.find('a', href=re.compile(r'cc-index\.paths\.gz'))
         if not link: return []
         index_paths_url = urljoin(archive_url, link['href'])
-        response = session.get(index_paths_url, stream=True, timeout=READ_TIMEOUT)
-        response.raise_for_status()
-        decompressed = gzip.decompress(response.content)
+        response_gz = session.get(index_paths_url, timeout=READ_TIMEOUT)
+        decompressed = gzip.decompress(response_gz.content)
         paths = decompressed.decode('utf-8').strip().split('\n')
         tasks = []
+        archive_name = archive_url.split('/')[-2]
         for path in paths:
             if not path: continue
             final_url = urljoin("https://data.commoncrawl.org/", path)
@@ -116,23 +136,27 @@ def process_single_archive(archive_url):
         return tasks
     except Exception:
         return []
+    finally:
+        if progress:
+            progress.update()
 
 def collect_all_download_tasks(archive_urls):
     print(f"\n{CYAN}{BOLD}[*] FAZ 2: CDX dosya listesi toplanıyor...{ENDC}")
     all_tasks = []
+    progress = SimpleProgress(len(archive_urls), "Arşivler Taranıyor")
     with ThreadPoolExecutor(max_workers=PARALLEL_ARCHIVE_SCAN) as executor:
-        futures = {executor.submit(process_single_archive, url): url for url in archive_urls}
-        pbar = tqdm(as_completed(futures), total=len(archive_urls), desc="Arşivler Taranıyor", unit="arsiv")
-        for future in pbar:
+        futures = {executor.submit(process_single_archive, url, progress): url for url in archive_urls}
+        for future in as_completed(futures):
             tasks = future.result()
             all_tasks.extend(tasks)
-            pbar.set_postfix(total_files=f'{len(all_tasks):,}')
+    progress.finish()
     print(f"{GREEN}[✓] FAZ 2 Tamamlandı: {len(all_tasks):,} CDX dosyası bulundu{ENDC}")
     return all_tasks
 
-def download_file_threaded(url, save_path, stats_counter):
+def download_file_threaded(task, progress, stats):
+    url, save_path = task
     if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
-        stats_counter.increment('skipped')
+        stats.increment('skipped')
         return
     session = create_optimized_session()
     try:
@@ -143,39 +167,32 @@ def download_file_threaded(url, save_path, stats_counter):
                 for chunk in r.iter_content(chunk_size=CHUNK_SIZE):
                     f.write(chunk)
             os.rename(temp_path, save_path)
-        stats_counter.increment('success')
+        stats.increment('success')
     except Exception:
         if 'temp_path' in locals() and os.path.exists(temp_path):
             os.remove(temp_path)
-        stats_counter.increment('failed')
+        stats.increment('failed')
+    finally:
+        if progress:
+            progress.update()
 
-def download_all_files_batched(tasks):
+def download_all_files(tasks):
     print(f"\n{CYAN}{BOLD}[*] FAZ 3: Hızlı indirme başlıyor...{ENDC}")
-    print(f"{YELLOW}[*] {MAX_WORKERS} eşzamanlı thread, {BATCH_SIZE} dosya/batch{ENDC}")
-    batches = [tasks[i:i + BATCH_SIZE] for i in range(0, len(tasks), BATCH_SIZE)]
-    total_batches = len(batches)
-    print(f"{YELLOW}[*] Toplam {total_batches} batch işlenecek{ENDC}\n")
+    print(f"{YELLOW}[*] {MAX_WORKERS} eşzamanlı asker görevde...{ENDC}")
     
-    overall_stats = ThreadSafeCounter()
+    stats = ThreadSafeCounter()
+    progress = SimpleProgress(len(tasks), "CDX Dosyaları İndiriliyor")
     
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        for i, batch in enumerate(batches, 1):
-            batch_pbar = tqdm(total=len(batch), desc=f"Batch {i}/{total_batches}", unit="dosya", leave=False)
-            futures = []
-            for url, save_path in batch:
-                future = executor.submit(download_file_threaded, url, save_path, overall_stats)
-                future.add_done_callback(lambda p: batch_pbar.update(1))
-                futures.append(future)
-            
-            # Wait for the batch to complete
-            for future in as_completed(futures):
-                try:
-                    future.result()
-                except Exception:
-                    pass
-            batch_pbar.close()
+        futures = {executor.submit(download_file_threaded, task, progress, stats) for task in tasks}
+        for future in as_completed(futures):
+            try:
+                future.result()
+            except Exception:
+                pass
+    progress.finish()
 
-    final_stats = overall_stats.get_stats()
+    final_stats = stats.get_stats()
     print(f"\n{GREEN}{BOLD}[✓] FAZ 3 Tamamlandı{ENDC}")
     print(f"  {GREEN}✓ Başarılı: {final_stats['success']}{ENDC}")
     print(f"  {YELLOW}⊘ Atlandı: {final_stats['skipped']}{ENDC}")
@@ -184,8 +201,8 @@ def download_all_files_batched(tasks):
 def main():
     print(f"{MAGENTA}{BOLD}")
     print("╔═══════════════════════════════════════════════════════════════╗")
-    print("║  🚀 KRYPTON CDX EXTRACTION JUGGERNAUT (Optimized)             ║")
-    print("║  ⚡ Massively Parallel | Resilient | High-Throughput           ║")
+    print("║  🚀 KRYPTON CDX EXTRACTOR (Python 3.6 Compatible)            ║")
+    print("║  ⚡ Massively Parallel | Resilient | Legacy Systems Ready      ║")
     print("╚═══════════════════════════════════════════════════════════════╝")
     print(ENDC)
     start_time = time.time()
@@ -194,15 +211,13 @@ def main():
     try:
         archive_urls = find_crawl_archives(BASE_URL)
         if not archive_urls:
-            print(f"{RED}[!] Arşiv bulunamadı. İşlem sonlandırılıyor.{ENDC}")
             return
 
         all_tasks = collect_all_download_tasks(archive_urls)
         if not all_tasks:
-            print(f"{YELLOW}[!] İndirilecek dosya bulunamadı.{ENDC}")
             return
 
-        download_all_files_batched(all_tasks)
+        download_all_files(all_tasks)
 
     except KeyboardInterrupt:
         print(f"\n{YELLOW}{BOLD}[!] KULLANICI TARAFINDAN DURDURULDU{ENDC}")
