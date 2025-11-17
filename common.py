@@ -8,23 +8,22 @@ from urllib.parse import urljoin
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 from requests.adapters import HTTPAdapter
-# Retry objesi artık kullanılmayacak, bu yüzden import edilmesine gerek yok.
-# from urllib3.util.retry import Retry 
 import warnings
 import sys
 
 warnings.filterwarnings('ignore', message='Unverified HTTPS request')
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  🎯 BULLETPROOF CONFIGURATION (Python 3.6 - No Retry)
+#  🎯 FOCUSED CONFIGURATION (CC-MAIN-2025 ONLY)
 # ═══════════════════════════════════════════════════════════════════════════
 
 BASE_URL = "https://commoncrawl.org/get-started"
-OUTPUT_DIR = "gzfiles"
+OUTPUT_DIR = "gzfiles_2025" # Çıktı klasörünü de buna göre isimlendirelim.
 MAX_WORKERS = 100
 PARALLEL_ARCHIVE_SCAN = 50
 CONNECT_TIMEOUT = 20
 READ_TIMEOUT = 300
+TARGET_YEAR = "2025" # HEDEF YIL
 
 # 🎨 RENK KODLARI
 GREEN = '\033[92m'
@@ -38,18 +37,10 @@ ENDC = '\033[0m'
 thread_local = threading.local()
 
 def create_optimized_session():
-    """Her thread için özel, optimize edilmiş session oluşturur (RETRY MEKANİZMASI OLMADAN)."""
+    """Her thread için özel, optimize edilmiş session oluşturur."""
     if not hasattr(thread_local, "session"):
         session = requests.Session()
-        
-        # --- PYTHON 3.6 UYUMLULUK ÇÖZÜMÜ: Retry objesi tamamen kaldırıldı. ---
-        # Hata yönetimi artık manuel olarak yapılacak.
-        adapter = HTTPAdapter(
-            pool_connections=MAX_WORKERS,
-            pool_maxsize=MAX_WORKERS * 2
-        )
-        # ---------------------------------------------------------------------
-        
+        adapter = HTTPAdapter(pool_connections=MAX_WORKERS, pool_maxsize=MAX_WORKERS * 2)
         session.mount("http://", adapter)
         session.mount("https://", adapter)
         session.headers.update({
@@ -59,39 +50,46 @@ def create_optimized_session():
         thread_local.session = session
     return thread_local.session
 
-# tqdm kütüphanesi olmadan çalışan basit bir ilerleme çubuğu sınıfı
-class SimpleProgress:
+class RobustProgress:
     def __init__(self, total, desc="Progress"):
         self.total = total
         self.current = 0
         self.desc = desc
         self.lock = threading.Lock()
-        self.start_time = time.time()
+        self.report_interval = int(total * 0.1) or 1
+        self.last_report = 0
     def update(self, n=1):
         with self.lock:
             self.current += n
-            elapsed = time.time() - self.start_time
-            rate = self.current / elapsed if elapsed > 0 else 0
-            percent = (self.current / self.total) * 100 if self.total > 0 else 0
-            bar_len = 30
-            filled_len = int(round(bar_len * self.current / float(self.total)))
-            bar = '█' * filled_len + '-' * (bar_len - filled_len)
-            sys.stdout.write(f'\r{self.desc}: |{bar}| {self.current}/{self.total} [{percent:.1f}%] @ {rate:.2f} items/s')
-            sys.stdout.flush()
+            if self.current - self.last_report >= self.report_interval or self.current == self.total:
+                percent = (self.current / self.total) * 100 if self.total > 0 else 0
+                print(f"[*] {self.desc}: {self.current}/{self.total} tamamlandı ({percent:.1f}%)")
+                self.last_report = self.current
     def finish(self):
-        sys.stdout.write('\n')
+        print(f"{GREEN}[✓] {self.desc} tamamlandı: {self.current}/{self.total}{ENDC}")
 
-# ... find_crawl_archives ve process_single_archive fonksiyonları aynı kalabilir ...
 def find_crawl_archives(start_url):
-    print(f"{CYAN}{BOLD}[*] FAZ 1: Ana arşiv listesi taranıyor...{ENDC}")
+    """
+    Ana sayfadan SADECE HEDEF YILA AİT crawl arşivlerinin linklerini bulur.
+    """
+    print(f"{CYAN}{BOLD}[*] FAZ 1: Ana arşiv listesi {TARGET_YEAR} yılı için taranıyor...{ENDC}")
     session = create_optimized_session()
     try:
         response = session.get(start_url, timeout=CONNECT_TIMEOUT)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
-        crawl_links = soup.find_all('a', href=re.compile(r'CC-MAIN-'))
+        
+        # --- STRATEJİK DEĞİŞİKLİK BURADA ---
+        # Regex'i, 'CC-MAIN-YYYY-' formatını arayacak şekilde güncelliyoruz.
+        regex_pattern = re.compile(r'CC-MAIN-' + TARGET_YEAR + r'-')
+        crawl_links = soup.find_all('a', href=regex_pattern)
+        # ------------------------------------
+
         urls = sorted(list(set([link['href'] for link in crawl_links])), reverse=True)
-        print(f"{GREEN}[✓] FAZ 1 Tamamlandı: {len(urls)} arşiv bulundu{ENDC}")
+        if not urls:
+            print(f"{YELLOW}[!] Uyarı: {TARGET_YEAR} yılına ait arşiv bulunamadı. Belki Common Crawl henüz yayınlamamıştır.{ENDC}")
+        else:
+            print(f"{GREEN}[✓] FAZ 1 Tamamlandı: {len(urls)} adet {TARGET_YEAR} arşivi bulundu.{ENDC}")
         return urls
     except Exception as e:
         print(f"{RED}[!] FAZ 1 Hatası: {e}{ENDC}")
@@ -124,7 +122,7 @@ def process_single_archive(archive_url, progress):
 def collect_all_download_tasks(archive_urls):
     print(f"\n{CYAN}{BOLD}[*] FAZ 2: CDX dosya listesi toplanıyor...{ENDC}")
     all_tasks = []
-    progress = SimpleProgress(len(archive_urls), "Arşivler Taranıyor")
+    progress = RobustProgress(len(archive_urls), "Arşivler Taranıyor")
     with ThreadPoolExecutor(max_workers=PARALLEL_ARCHIVE_SCAN) as executor:
         futures = {executor.submit(process_single_archive, url, progress): url for url in archive_urls}
         for future in as_completed(futures):
@@ -155,7 +153,7 @@ def download_file_threaded(task, stats):
         stats.increment('failed')
 
 def main():
-    print(f"{MAGENTA}{BOLD}KRYPTON CDX EXTRACTOR (Bulletproof Edition){ENDC}")
+    print(f"{MAGENTA}{BOLD}KRYPTON CDX EXTRACTOR (Focused Edition: {TARGET_YEAR}){ENDC}")
     start_time = time.time()
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     
@@ -167,7 +165,7 @@ def main():
 
         print(f"\n{CYAN}{BOLD}[*] FAZ 3: Hızlı indirme başlıyor...{ENDC}")
         stats = ThreadSafeCounter()
-        progress = SimpleProgress(len(all_tasks), "CDX Dosyaları İndiriliyor")
+        progress = RobustProgress(len(all_tasks), "CDX Dosyaları İndiriliyor")
         
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
             futures = {executor.submit(download_file_threaded, task, stats): task for task in all_tasks}
@@ -197,8 +195,6 @@ def main():
         print(f"{CYAN}📁 Kayıt Yeri: ./{OUTPUT_DIR}{ENDC}")
 
 if __name__ == "__main__":
-    # ThreadSafeCounter classını ve diğer gerekli sınıfları/fonksiyonları buraya taşıdım
-    # böylece __main__ bloğunda da erişilebilir oluyorlar.
     class ThreadSafeCounter:
         def __init__(self):
             self.lock = threading.Lock()
