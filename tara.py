@@ -11,7 +11,7 @@ SOURCE_FILE = "targets.txt"
 OUTPUT_FILE = "hedefler.txt"
 PORTS_TO_CHECK = [22, 23]
 # ASKER SAYISI: Sistemi ve ağı son limitine kadar zorla.
-MAX_WORKERS = 109 
+MAX_WORKERS = 99 
 SCAN_TIMEOUT = 0.6 # Hızlı tarama için zaman aşımını düşür.
 
 # --- RENK KODLARI ---
