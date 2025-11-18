@@ -11,7 +11,7 @@ from queue import Queue
 SOURCE_FILE = "targets.txt"
 OUTPUT_FILE = "hedefler.txt"
 PORTS_TO_CHECK = [22, 23]
-DNS_WORKERS = 500
+DNS_WORKERS = 70
 SCAN_WORKERS = 2000 
 SCAN_TIMEOUT = 0.6
 
