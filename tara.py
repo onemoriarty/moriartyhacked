@@ -1,124 +1,85 @@
 import socket
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 import time
 import sys
 import os
 import ipaddress
+from queue import Queue
 
-# --- OPERASYONEL KONFİGÜRASYON (HİPER HIZ ODAKLI) ---
+# --- OPERASYONEL KONFİGÜRASYON ---
 SOURCE_FILE = "targets.txt"
 OUTPUT_FILE = "hedefler.txt"
 PORTS_TO_CHECK = [22, 23]
-# ASKER SAYISI: Sistemi ve ağı son limitine kadar zorla.
-MAX_WORKERS = 99 
-SCAN_TIMEOUT = 0.6 # Hızlı tarama için zaman aşımını düşür.
+DNS_WORKERS = 500
+SCAN_WORKERS = 2000 
+SCAN_TIMEOUT = 0.6
 
 # --- RENK KODLARI ---
 GREEN, YELLOW, CYAN, RED, BOLD, ENDC = '\033[92m', '\033[93m', '\033[96m', '\033[91m', '\033[1m', '\033[0m'
 
 # --- PAYLAŞILAN NESNELER ---
 file_lock = threading.Lock()
-# Sayaçlar, anlık hız ve ETA hesaplaması için
-processed_tasks = 0
-found_targets_count = 0
-total_tasks = 0
-scan_start_time = 0
+# İki ana faz arasındaki veri akışı için kuyruklar
+ip_queue = Queue(maxsize=SCAN_WORKERS * 10) # Taranacak IP'ler için
+task_queue = Queue(maxsize=SCAN_WORKERS * 100) # Atomik (IP:PORT) görevleri için
 
-def resolve_target_threaded(domain_queue, resolved_ips_set, lock):
-    """Kuyruktan domain alıp çözen thread işçisi."""
-    while not domain_queue.empty():
+def resolve_target_worker():
+    """FAZ 1: Domainleri IP'ye çevirip IP kuyruğuna atar."""
+    # Bu işçi, ana program sonlandığında duracak.
+    while True:
+        domain = domain_queue.get()
         try:
-            domain = domain_queue.get_nowait()
             _, _, ip_list = socket.gethostbyname_ex(domain)
-            with lock:
-                resolved_ips_set.update(ip_list)
+            for ip in ip_list:
+                # Bloklamadan kuyruğa koy, eğer kuyruk doluysa üretimi yavaşlat.
+                ip_queue.put(ip)
+        except socket.gaierror:
+            pass # Domain çözülemezse sessizce devam et.
+        finally:
             domain_queue.task_done()
-        except (socket.gaierror, Exception):
-            domain_queue.task_done()
-            continue
 
-def phase1_fast_resolver(targets):
-    """FAZ 1: Yüksek paralellikte DNS çözümlemesi yapar."""
-    print("\n{}[*] FAZ 1: DNS Çözümlemesi başlatılıyor... ({} hedef){}".format(CYAN, len(targets), ENDC))
-    
-    initial_ips = set()
-    domains_to_resolve = set()
-    for target in targets:
+def ip_processor_worker():
+    """FAZ 2: IP kuyruğundan IP alıp, tarama görevleri oluşturur."""
+    processed_subnets = set()
+    while True:
+        ip = ip_queue.get()
         try:
-            if ipaddress.ip_address(target).is_global:
-                initial_ips.add(target)
-        except ValueError:
-            domains_to_resolve.add(target)
-            
-    if domains_to_resolve:
-        from queue import Queue
-        q = Queue()
-        for domain in domains_to_resolve: q.put(domain)
-        
-        threads = []
-        for _ in range(min(500, len(domains_to_resolve))): # DNS için 500 thread'i geçme
-            t = threading.Thread(target=resolve_target_threaded, args=(q, initial_ips, threading.Lock()))
-            t.start()
-            threads.append(t)
-        
-        q.join() # Tüm domainlerin işlenmesini bekle
+            # IP'nin /24 subnet'ini hesapla.
+            subnet = ipaddress.ip_network("{}/24".format(ip), strict=False)
+            # Eğer bu subnet daha önce işlenmediyse
+            if subnet not in processed_subnets:
+                processed_subnets.add(subnet)
+                for host in subnet.hosts():
+                    for port in PORTS_TO_CHECK:
+                        task_queue.put((str(host), port))
+        except Exception:
+            pass
+        finally:
+            ip_queue.task_done()
 
-    print("{}[✓] FAZ 1 Tamamlandı. {} benzersiz IP adresi bulundu.{}".format(GREEN, len(initial_ips), ENDC))
-    return initial_ips
-
-def check_single_target(ip, port):
-    """
-    En atomik görev: Tek bir IP ve tek bir portu kontrol eder.
-    """
-    global processed_tasks, found_targets_count
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(SCAN_TIMEOUT)
-        if s.connect_ex((ip, port)) == 0:
-            result = "{}:{}".format(ip, port)
-            with file_lock:
-                found_targets_count += 1
-                sys.stdout.write("\r\033[K{}[+] VEKTÖR TESPİT EDİLDİ -> {}{}\n".format(GREEN, result, ENDC))
-                with open(OUTPUT_FILE, "a") as f:
-                    f.write(result + "\n")
-    except socket.error:
-        pass
-    finally:
-        if 's' in locals() and s:
-            s.close()
-        with file_lock:
-            processed_tasks += 1
-
-def format_eta(seconds):
-    if seconds is None or seconds < 0: return "Hesaplanıyor..."
-    hours, remainder = divmod(seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    return "{:02d}s {:02d}d {:02d}sn".format(int(hours), int(minutes), int(seconds))
-
-def status_reporter():
-    """Anlık hız ve ETA'yı raporlayan thread."""
-    global processed_tasks, total_tasks, scan_start_time
-    while processed_tasks < total_tasks:
-        elapsed_time = time.time() - scan_start_time
-        rate = processed_tasks / elapsed_time if elapsed_time > 0 else 0
-        remaining_tasks = total_tasks - processed_tasks
-        eta_seconds = remaining_tasks / rate if rate > 0 else None
-        
-        percent = (processed_tasks / total_tasks) * 100
-        
-        eta_formatted = format_eta(eta_seconds)
-        status_line = "\r[*] Portlar taranıyor: {}/{} ({:.1f}%) | Hız: {:,.0f} port/s | Bulunan: {} | ETA: {}".format(
-            processed_tasks, total_tasks, percent, rate, found_targets_count, eta_formatted)
-
-        sys.stdout.write(status_line)
-        sys.stdout.flush()
-        time.sleep(1)
+def scan_worker():
+    """FAZ 3: Görev kuyruğundan (IP:PORT) alıp tarama yapar."""
+    while True:
+        ip, port = task_queue.get()
+        s = None
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(SCAN_TIMEOUT)
+            if s.connect_ex((ip, port)) == 0:
+                result = "{}:{}".format(ip, port)
+                with file_lock:
+                    # Anlık olarak dosyaya yaz, ekrana değil. Ekrana sadece ilerleme basılır.
+                    with open(OUTPUT_FILE, "a") as f:
+                        f.write(result + "\n")
+        except socket.error:
+            pass
+        finally:
+            if s: s.close()
+            task_queue.task_done()
 
 def main():
-    print("{}{}[*] KRYPTON HİPER HIZ TARAYICI (Hyperdrive Edition){}{}".format(BOLD, CYAN, ENDC, ENDC))
-    global total_tasks, scan_start_time
-    
+    print("{}{}[*] KRYPTON VERİ AKIŞ TARAYICI (Streamflow Edition){}{}".format(BOLD, CYAN, ENDC, ENDC))
     start_time = time.time()
     
     if os.path.exists(OUTPUT_FILE): os.remove(OUTPUT_FILE)
@@ -127,53 +88,79 @@ def main():
         print("{}[!] Hata: Kaynak dosya '{}' bulunamadı.{}".format(RED, SOURCE_FILE, ENDC))
         return
 
+    # --- ÜRETİM HATTINI (PIPELINE) KUR ---
+    print("[*] Üretim hattı kuruluyor...")
+    global domain_queue
+    domain_queue = Queue()
+
+    # Faz 1 işçilerini başlat (Domain -> IP)
+    for _ in range(DNS_WORKERS):
+        threading.Thread(target=resolve_target_worker, daemon=True).start()
+
+    # Faz 2 işçilerini başlat (IP -> IP:PORT Görevleri)
+    for _ in range(os.cpu_count() or 4): # Bu CPU-yoğun bir iş olabilir, o yüzden az sayıda.
+        threading.Thread(target=ip_processor_worker, daemon=True).start()
+
+    # Faz 3 işçilerini başlat (Port Tarama)
+    for _ in range(SCAN_WORKERS):
+        threading.Thread(target=scan_worker, daemon=True).start()
+    
+    print(f"[*] {DNS_WORKERS} DNS, {os.cpu_count() or 4} İşlemci, {SCAN_WORKERS} Tarama askeri görevde.")
+
+    # --- ÜRETİMİ BAŞLAT ---
+    print("[*] Operasyon başlıyor. Kaynak dosya okunuyor ve işleniyor...")
+    
+    line_count = 0
     with open(SOURCE_FILE, 'r', encoding='utf-8') as f:
-        targets = list(set(line.strip() for line in f if line.strip()))
+        for line in f:
+            line_count += 1
+            target = line.strip()
+            if not target: continue
+            
+            # Anında işle, bellekte tutma.
+            try:
+                if ipaddress.ip_address(target).is_global:
+                    ip_queue.put(target)
+                else: # Özel IP ise atla
+                    pass
+            except ValueError:
+                domain_queue.put(target)
 
-    if not targets:
-        print("{}[!] Kaynak dosya '{}' boş.{}".format(YELLOW, SOURCE_FILE, ENDC))
-        return
+            # Arayüzü çok sık boğmamak için
+            if line_count % 10000 == 0:
+                sys.stdout.write(f"\r[*] Kaynak okundu: {line_count:,} | "
+                                 f"DNS Kuyruğu: {domain_queue.qsize():,} | "
+                                 f"IP Kuyruğu: {ip_queue.qsize():,} | "
+                                 f"Tarama Kuyruğu: {task_queue.qsize():,}")
+                sys.stdout.flush()
 
-    seed_ips = phase1_fast_resolver(targets)
-    if not seed_ips: return
+    print(f"\n[*] Kaynak dosyanın tamamı ({line_count:,} satır) üretim hattına beslendi.")
+    print("[*] Tüm görevlerin tamamlanması bekleniyor...")
 
-    print("\n{}[*] FAZ 2: Topyekûn Taarruz (Port Tarama) başlıyor...{}".format(CYAN, ENDC))
-    subnets = {ipaddress.ip_network("{}/24".format(ip), strict=False) for ip in seed_ips}
+    domain_queue.join()
+    ip_queue.join()
+    task_queue.join()
     
-    # --- YENİ MİMARİ: ATOMİK GÖREV OLUŞTURMA ---
-    all_scan_tasks = []
-    print("[*] Tüm potansiyel hedefler (IP:PORT) hesaplanıyor...")
-    for net in subnets:
-        for host in net.hosts():
-            for port in PORTS_TO_CHECK:
-                all_scan_tasks.append((str(host), port))
+    print("\n{}[✓] Tüm görevler tamamlandı.{}".format(GREEN, ENDC))
     
-    total_tasks = len(all_scan_tasks)
-    print("[*] Toplam {} adet port taranacak. {} asker (thread) görevde.".format(total_tasks, MAX_WORKERS))
-
-    scan_start_time = time.time()
-    
-    # Durum raporlama thread'ini başlat
-    status_thread = threading.Thread(target=status_reporter, daemon=True)
-    status_thread.start()
-
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        # Tüm atomik görevleri tek seferde havuza gönder.
-        # `*task` ifadesi, (ip, port) ikilisini `check_single_target` fonksiyonuna
-        # iki ayrı argüman olarak açar.
-        executor.map(lambda task: check_single_target(*task), all_scan_tasks)
-
-    # Durum thread'inin son çıktıyı yazmasını bekle.
-    time.sleep(1.1)
-    
-    print("\n{}[✓] FAZ 2 Tamamlandı. Tarama bitti.{}".format(GREEN, ENDC))
-    
-    # ... (Final rapor kısmı aynı) ...
+    # --- NİHAİ RAPOR ---
+    print("\n{}[*] Sonuçlar tekilleştiriliyor...{}".format(CYAN, ENDC))
+    unique_count = 0
+    if os.path.exists(OUTPUT_FILE):
+        with open(OUTPUT_FILE, 'r') as f:
+            lines = set(f.read().splitlines())
+        unique_count = len(lines)
+        with open(OUTPUT_FILE, 'w') as f:
+            f.write('\n'.join(sorted(list(lines))))
+            
     elapsed_total = time.time() - start_time
     print("\n-----------------------------------------------------")
-    print("{}{}[✓] OPERASYON BAŞARIYLA TAMAMLANDI{}".format(GREEN, BOLD, ENDC))
-    print("⏱️  Toplam Süre: {}".format(format_eta(elapsed_total)))
-    print("📁 Eyleme Geçirilebilir İstihbarat: .\\{}".format(OUTPUT_FILE))
+    print("{}{}[✓] OPERASYON BAŞARIYLA TAMAMLANDI{}".format(GREEN, BOLD, ENDC, ENDC))
+    # format_eta fonksiyonu
+    hours, rem = divmod(elapsed_total, 3600)
+    minutes, seconds = divmod(rem, 60)
+    print("⏱️  Toplam Süre: {:02d}s {:02d}d {:02d}sn".format(int(hours), int(minutes), int(seconds)))
+    print(f"📁 {unique_count:,} benzersiz hedef '{OUTPUT_FILE}' dosyasına kaydedildi.")
 
 if __name__ == "__main__":
     main()
