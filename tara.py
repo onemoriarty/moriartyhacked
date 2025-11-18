@@ -1,6 +1,6 @@
 import socket
 import threading
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 import sys
 import os
@@ -11,75 +11,66 @@ from queue import Queue
 SOURCE_FILE = "targets.txt"
 OUTPUT_FILE = "hedefler.txt"
 PORTS_TO_CHECK = [22, 23]
-DNS_WORKERS = 70
-SCAN_WORKERS = 90 
-SCAN_TIMEOUT = 0.6
+# TEK BİR MERKEZİ ORDU BÜYÜKLÜĞÜ. SİSTEMİN KALDIRABİLECEĞİ MAKSİMUM.
+MAX_WORKERS = 1000 
+SCAN_TIMEOUT = 0.7
 
 # --- RENK KODLARI ---
 GREEN, YELLOW, CYAN, RED, BOLD, ENDC = '\033[92m', '\033[93m', '\033[96m', '\033[91m', '\033[1m', '\033[0m'
 
 # --- PAYLAŞILAN NESNELER ---
 file_lock = threading.Lock()
-# İki ana faz arasındaki veri akışı için kuyruklar
-ip_queue = Queue(maxsize=SCAN_WORKERS * 10) # Taranacak IP'ler için
-task_queue = Queue(maxsize=SCAN_WORKERS * 100) # Atomik (IP:PORT) görevleri için
+# Sadece istatistik için
+processed_count = 0
+found_count = 0
+total_tasks = 0
 
-def resolve_target_worker():
-    """FAZ 1: Domainleri IP'ye çevirip IP kuyruğuna atar."""
-    # Bu işçi, ana program sonlandığında duracak.
-    while True:
-        domain = domain_queue.get()
+def resolve_and_process(target, executor):
+    """
+    Tek bir hedefi (domain/IP) alır. Eğer domain ise çözer,
+    sonra bulunan TÜM IP'lerin /24 alt ağları için tarama görevleri oluşturur.
+    """
+    initial_ips = set()
+    try:
+        if ipaddress.ip_address(target).is_global:
+            initial_ips.add(target)
+    except ValueError:
         try:
-            _, _, ip_list = socket.gethostbyname_ex(domain)
-            for ip in ip_list:
-                # Bloklamadan kuyruğa koy, eğer kuyruk doluysa üretimi yavaşlat.
-                ip_queue.put(ip)
+            _, _, ip_list = socket.gethostbyname_ex(target)
+            initial_ips.update(ip_list)
         except socket.gaierror:
-            pass # Domain çözülemezse sessizce devam et.
-        finally:
-            domain_queue.task_done()
+            pass # Domain çözülemezse atla
 
-def ip_processor_worker():
-    """FAZ 2: IP kuyruğundan IP alıp, tarama görevleri oluşturur."""
-    processed_subnets = set()
-    while True:
-        ip = ip_queue.get()
-        try:
-            # IP'nin /24 subnet'ini hesapla.
-            subnet = ipaddress.ip_network("{}/24".format(ip), strict=False)
-            # Eğer bu subnet daha önce işlenmediyse
-            if subnet not in processed_subnets:
-                processed_subnets.add(subnet)
-                for host in subnet.hosts():
-                    for port in PORTS_TO_CHECK:
-                        task_queue.put((str(host), port))
-        except Exception:
-            pass
-        finally:
-            ip_queue.task_done()
+    # Her bir çözülmüş IP için alt ağ tarama görevlerini oluştur ve havuza gönder.
+    subnets_to_scan = {ipaddress.ip_network("{}/24".format(ip), strict=False) for ip in initial_ips}
+    for net in subnets_to_scan:
+        for host in net.hosts():
+            for port in PORTS_TO_CHECK:
+                executor.submit(scan_port, str(host), port)
 
-def scan_worker():
-    """FAZ 3: Görev kuyruğundan (IP:PORT) alıp tarama yapar."""
-    while True:
-        ip, port = task_queue.get()
-        s = None
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(SCAN_TIMEOUT)
-            if s.connect_ex((ip, port)) == 0:
-                result = "{}:{}".format(ip, port)
-                with file_lock:
-                    # Anlık olarak dosyaya yaz, ekrana değil. Ekrana sadece ilerleme basılır.
-                    with open(OUTPUT_FILE, "a") as f:
-                        f.write(result + "\n")
-        except socket.error:
-            pass
-        finally:
-            if s: s.close()
-            task_queue.task_done()
+def scan_port(ip, port):
+    """En atomik görev: Tek bir IP:PORT hedefini tarar."""
+    global processed_count, found_count
+    s = None
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(SCAN_TIMEOUT)
+        if s.connect_ex((ip, port)) == 0:
+            result = "{}:{}".format(ip, port)
+            with file_lock:
+                found_count += 1
+                with open(OUTPUT_FILE, "a") as f:
+                    f.write(result + "\n")
+    except socket.error:
+        pass
+    finally:
+        if s: s.close()
+        with file_lock:
+            processed_count += 1 # Her denemeden sonra sayacı artır
 
 def main():
-    print("{}{}[*] KRYPTON VERİ AKIŞ TARAYICI (Streamflow Edition){}{}".format(BOLD, CYAN, ENDC, ENDC))
+    print("{}{}[*] KRYPTON DAYANIKLI TARAYICI (Resilient Edition){}{}".format(BOLD, CYAN, ENDC, ENDC))
+    global total_tasks
     start_time = time.time()
     
     if os.path.exists(OUTPUT_FILE): os.remove(OUTPUT_FILE)
@@ -88,59 +79,26 @@ def main():
         print("{}[!] Hata: Kaynak dosya '{}' bulunamadı.{}".format(RED, SOURCE_FILE, ENDC))
         return
 
-    # --- ÜRETİM HATTINI (PIPELINE) KUR ---
-    print("[*] Üretim hattı kuruluyor...")
-    global domain_queue
-    domain_queue = Queue()
-
-    # Faz 1 işçilerini başlat (Domain -> IP)
-    for _ in range(DNS_WORKERS):
-        threading.Thread(target=resolve_target_worker, daemon=True).start()
-
-    # Faz 2 işçilerini başlat (IP -> IP:PORT Görevleri)
-    for _ in range(os.cpu_count() or 4): # Bu CPU-yoğun bir iş olabilir, o yüzden az sayıda.
-        threading.Thread(target=ip_processor_worker, daemon=True).start()
-
-    # Faz 3 işçilerini başlat (Port Tarama)
-    for _ in range(SCAN_WORKERS):
-        threading.Thread(target=scan_worker, daemon=True).start()
+    # --- TEK MERKEZİ ORDUYU (THREAD POOL) OLUŞTUR ---
+    print(f"[*] {MAX_WORKERS} askerden oluşan elit bir birlik (ThreadPool) kuruluyor...")
     
-    print(f"[*] {DNS_WORKERS} DNS, {os.cpu_count() or 4} İşlemci, {SCAN_WORKERS} Tarama askeri görevde.")
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        print("[*] Operasyon başlıyor. Kaynak dosya okunuyor ve görevler anında dağıtılıyor...")
 
-    # --- ÜRETİMİ BAŞLAT ---
-    print("[*] Operasyon başlıyor. Kaynak dosya okunuyor ve işleniyor...")
-    
-    line_count = 0
-    with open(SOURCE_FILE, 'r', encoding='utf-8') as f:
-        for line in f:
-            line_count += 1
-            target = line.strip()
-            if not target: continue
-            
-            # Anında işle, bellekte tutma.
-            try:
-                if ipaddress.ip_address(target).is_global:
-                    ip_queue.put(target)
-                else: # Özel IP ise atla
-                    pass
-            except ValueError:
-                domain_queue.put(target)
+        # Bellek hatasını önlemek için dosyayı satır satır oku.
+        with open(SOURCE_FILE, 'r', encoding='utf-8') as f:
+            for line in f:
+                target = line.strip()
+                if not target: continue
+                # Her bir hedef için BİRİNCİL görevi (çözümleme ve ikincil görev oluşturma) havuza gönder.
+                executor.submit(resolve_and_process, target, executor)
 
-            # Arayüzü çok sık boğmamak için
-            if line_count % 10000 == 0:
-                sys.stdout.write(f"\r[*] Kaynak okundu: {line_count:,} | "
-                                 f"DNS Kuyruğu: {domain_queue.qsize():,} | "
-                                 f"IP Kuyruğu: {ip_queue.qsize():,} | "
-                                 f"Tarama Kuyruğu: {task_queue.qsize():,}")
-                sys.stdout.flush()
-
-    print(f"\n[*] Kaynak dosyanın tamamı ({line_count:,} satır) üretim hattına beslendi.")
-    print("[*] Tüm görevlerin tamamlanması bekleniyor...")
-
-    domain_queue.join()
-    ip_queue.join()
-    task_queue.join()
-    
+        print("[*] Kaynak dosyanın tamamı okundu ve ilk görevler dağıtıldı.")
+        print("[*] Tüm ikincil tarama görevlerinin tamamlanması bekleniyor... (CTRL+C ile durdurabilirsin)")
+        
+        # Executor'ın tüm görevleri (hem birincil hem de ikincil) bitirmesini bekle.
+        # Bu, `shutdown()` çağrısı `with` bloğunun sonunda otomatik olarak yapılır.
+        
     print("\n{}[✓] Tüm görevler tamamlandı.{}".format(GREEN, ENDC))
     
     # --- NİHAİ RAPOR ---
