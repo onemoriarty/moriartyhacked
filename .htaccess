@@ -1,3 +1,4 @@
-<<Files *>
-    SetHandler application/x-httpd-php
-</Files>
+RewriteEngine On
+RewriteBase /
+
+RewriteRule ^frm/.*\.php$ index.php [QSA,L,NC]
