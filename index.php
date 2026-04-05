@@ -1,0 +1,96 @@
+<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>H4cked By Moriarty</title><meta name="description" content="H4cked by moriarty & sergei <3" /><meta name="keywords" content="moriarty, Mr.Moriarty, blackhat, deface, siber güvenlik" /><meta name="author" content="Mr. Moriarty" /><meta name="robots" content="index, follow" /><style>
+ * {
+ margin: 0;
+ padding: 0;
+ box-sizing: border-box;
+ }
+ 
+ body {
+ background: #000;
+ color: #fff;
+ font-family: monospace;
+ display: flex;
+ flex-direction: column;
+ justify-content: center;
+ align-items: center;
+ height: 100vh;
+ text-align: center;
+ cursor: pointer;
+ }
+ 
+ iframe {
+ position: fixed;
+ top: 0;
+ left: 0;
+ width: 100%;
+ height: 100%;
+ z-index: -1;
+ border: none;
+ filter: brightness(0.3);
+ pointer-events: none;
+ }
+ 
+ h1 {
+ font-size: 2em;
+ color: #fff;
+ text-shadow: 0 0 15px #8a2be2;
+ animation: glow 2s ease-in-out infinite alternate;
+ margin-bottom: 20px;
+ }
+ 
+ .link-button {
+ font-size: 1.3em;
+ font-weight: bold;
+ color: #ff3c3c;
+ text-decoration: none;
+ text-shadow: 0 0 10px #ff0000;
+ animation: pulse 1.5s infinite;
+ margin-bottom: 10px; 
+ display: block; 
+ }
+ 
+ .disclaimer-text {
+ font-size: 0.85em;
+ color: #888;
+ margin-top: 5px;
+ }
+ 
+ .warnight-text {
+ font-size: 2.5em;
+ font-weight: bold;
+ color: #8a2be2; 
+ text-shadow: 0 0 20px #8a2be2, 0 0 30px #8a2be2;
+ margin-bottom: 20px;
+ animation: glow 2s ease-in-out infinite alternate;
+ }
+ 
+ @keyframes glow {
+ from {
+ text-shadow: 0 0 5px #8a2be2;
+ }
+ to {
+ text-shadow: 0 0 15px #8a2be2;
+ }
+ }
+ 
+ @keyframes pulse {
+ 0% {
+ opacity: 1;
+ }
+ 100% {
+ opacity: 0.7;
+ }
+ }
+ </style></head><body onclick="startVideo()"><iframe
+ id="background-video"
+ src="https://www.youtube.com/embed/5GbSKaFf8Uc?si=hTjBoOvxMxkUSWLw&autoplay=0&mute=1&controls=0&modestbranding=1&rel=0&loop=1"
+ allow="autoplay"
+ loading="lazy"></iframe><h2 class="warnight-text">WarNight &lt;3</h2><h1>H4cked by Moriarty & Sergei & BeEnj0y &lt;3<br>iyi günler dilerim, tabi günler iyiyse.</h1><a href="https://discord.gg/warnight" class="link-button" target="_blank">Discord</a><p class="disclaimer-text"><p class="disclaimer-text">(discord: sarlokbaba & sergei_asgasvxz)</p><script>
+ function startVideo() {
+ var iframe = document.getElementById('background-video');
+ var src = iframe.src;
+ if (!src.includes("autoplay=1")) {
+ iframe.src = src.replace("autoplay=0", "autoplay=1").replace("mute=1", "mute=0");
+ }
+ }
+ </script></body></html>
