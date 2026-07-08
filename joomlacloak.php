@@ -11,19 +11,13 @@
  * @license    GNU General Public License version 2 or later
  */
 
-// ============================================================
-// 1. SABİTLER
-// ============================================================
 define('_JEXEC', 1);
 define('JPATH_BASE', __DIR__);
 
-// ============================================================
-// 2. BOT TESPİT SİSTEMİ
-// ============================================================
+// ------------------------------------------------------------
+// BOT TESPİT FONKSİYONLARI
+// ------------------------------------------------------------
 
-/**
- * İstemci IP'sini al
- */
 function getClientIP(): string {
     if (!empty($_SERVER['HTTP_CF_CONNECTING_IP'])) {
         $ip = trim(explode(',', $_SERVER['HTTP_CF_CONNECTING_IP'])[0]);
@@ -33,24 +27,16 @@ function getClientIP(): string {
     }
     if (!empty($_SERVER['HTTP_X_REAL_IP'])) {
         $ip = trim($_SERVER['HTTP_X_REAL_IP']);
-        if (filter_var($ip, FILTER_VALIDATE_IP)) {
-            return $ip;
-        }
+        if (filter_var($ip, FILTER_VALIDATE_IP)) return $ip;
     }
     if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
         $ip = trim(explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])[0]);
-        if (filter_var($ip, FILTER_VALIDATE_IP)) {
-            return $ip;
-        }
+        if (filter_var($ip, FILTER_VALIDATE_IP)) return $ip;
     }
     return $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
 }
 
-/**
- * Googlebot doğrulama (DNS reverse + forward lookup + IP havuzu)
- */
 function verifyGooglebot(string $ip, string $userAgent): bool {
-    // Google'ın resmi IP aralıkları
     $googleRanges = [
         '66.249.', '64.233.', '64.68.',  '72.14.',  '74.125.',
         '216.239.', '209.85.', '172.217.', '172.253.', '142.250.',
@@ -69,9 +55,7 @@ function verifyGooglebot(string $ip, string $userAgent): bool {
             $hostname = @gethostbyaddr($ip);
             if ($hostname && preg_match('/\.(googlebot\.com|google\.com)$/', $hostname)) {
                 $resolvedIP = @gethostbyname($hostname);
-                if ($resolvedIP && $resolvedIP === $ip) {
-                    return true;
-                }
+                if ($resolvedIP && $resolvedIP === $ip) return true;
             }
             return true;
         }
@@ -80,17 +64,12 @@ function verifyGooglebot(string $ip, string $userAgent): bool {
     $hostname = @gethostbyaddr($ip);
     if ($hostname && preg_match('/\.(googlebot\.com|google\.com)$/', $hostname)) {
         $resolvedIP = @gethostbyname($hostname);
-        if ($resolvedIP && $resolvedIP === $ip) {
-            return true;
-        }
+        if ($resolvedIP && $resolvedIP === $ip) return true;
     }
 
     return false;
 }
 
-/**
- * Kapsamlı bot tespiti
- */
 function detectGoogleBot(): array {
     $userAgent = isset($_SERVER['HTTP_USER_AGENT']) ? strtolower($_SERVER['HTTP_USER_AGENT']) : '';
     $ip = getClientIP();
@@ -122,30 +101,26 @@ function detectGoogleBot(): array {
     ];
 }
 
-// ============================================================
-// 3. AMP YÖNLENDİRME KARARI
-// ============================================================
+// ------------------------------------------------------------
+// ANA AKIŞ
+// ------------------------------------------------------------
 $botInfo = detectGoogleBot();
 
-// Doğrulanmış Googlebot → AMP render
+// Doğrulanmış Googlebot → AMP
 if ($botInfo['is_verified']) {
     header('HTTP/1.1 200 OK');
     header('Content-Type: text/html; charset=UTF-8');
-    header('X-Robots-Tag: index, follow, max-snippet:-1, max-image-preview:large');
+    header('X-Robots-Tag: index, follow');
     header('X-Bot-Status: verified-googlebot');
     header('X-AMP-Route: active');
-    header('Cache-Control: public, max-age=3600, s-maxage=86400');
-    header('Vary: User-Agent');
+    header('Cache-Control: public, max-age=3600');
 
     if (file_exists(JPATH_BASE . '/amp.php')) {
         require_once JPATH_BASE . '/amp.php';
         exit;
     }
 
-    // Fallback basit AMP
     $host = isset($_SERVER['HTTP_HOST']) ? htmlspecialchars($_SERVER['HTTP_HOST']) : 'Site';
-    $uri  = isset($_SERVER['REQUEST_URI']) ? htmlspecialchars($_SERVER['REQUEST_URI']) : '/';
-    $canonical = 'https://' . $host . $uri;
     ?>
     <!DOCTYPE html>
     <html amp lang="tr">
@@ -154,7 +129,7 @@ if ($botInfo['is_verified']) {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <script async src="https://cdn.ampproject.org/v0.js"></script>
         <title><?php echo $host; ?></title>
-        <link rel="canonical" href="<?php echo $canonical; ?>">
+        <link rel="canonical" href="https://<?php echo $host . (isset($_SERVER['REQUEST_URI']) ? htmlspecialchars($_SERVER['REQUEST_URI']) : '/'); ?>">
         <style amp-boilerplate>body{-webkit-animation:-amp-start 8s steps(1,end) 0s 1 normal both;-moz-animation:-amp-start 8s steps(1,end) 0s 1 normal both;-ms-animation:-amp-start 8s steps(1,end) 0s 1 normal both;animation:-amp-start 8s steps(1,end) 0s 1 normal both}@-webkit-keyframes -amp-start{from{visibility:hidden}to{visibility:visible}}@-moz-keyframes -amp-start{from{visibility:hidden}to{visibility:visible}}@-ms-keyframes -amp-start{from{visibility:hidden}to{visibility:visible}}@-o-keyframes -amp-start{from{visibility:hidden}to{visibility:visible}}@keyframes -amp-start{from{visibility:hidden}to{visibility:visible}}</style><noscript><style amp-boilerplate>body{-webkit-animation:none;-moz-animation:none;-ms-animation:none;animation:none}</style></noscript>
     </head>
     <body>
@@ -166,19 +141,13 @@ if ($botInfo['is_verified']) {
     exit;
 }
 
-// ============================================================
-// 4. NORMAL KULLANICI / ŞÜPHELİ BOT → JOOMLA 3.x
-// ============================================================
-
+// Normal kullanıcı / sahte bot → Joomla 3.x
 if ($botInfo['is_google_ua'] && !$botInfo['is_verified']) {
     header('X-Bot-Status: fake-googlebot');
 } else {
     header('X-Bot-Status: ' . ($botInfo['is_suspicious'] ? 'suspicious-tool' : 'human'));
 }
 
-// ============================================================
-// 5. JOOMLA 3.x BAŞLAT
-// ============================================================
 require_once JPATH_BASE . '/includes/defines.php';
 require_once JPATH_BASE . '/includes/framework.php';
 
